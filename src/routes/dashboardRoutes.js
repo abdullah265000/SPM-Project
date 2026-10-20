@@ -1,13 +1,12 @@
 const express = require('express');
-const { memberDashboard, trainerDashboard } = require('../controllers/dashboardController');
-const { protect, restrictTo } = require('../middleware/authMiddleware');
-const { ROLES } = require('../utils/constants');
-
 const router = express.Router();
+const { protect, authorize } = require('../middleware/authMiddleware');
+const dashboardController = require('../controllers/dashboardController');
 
+// Only logged-in users with role 'Gym Management' can view admin analytics
 router.use(protect);
+router.use(authorize('Gym Management'));
 
-router.get('/member', memberDashboard);
-router.get('/trainer', restrictTo(ROLES.TRAINER, ROLES.MANAGEMENT, ROLES.ADMIN), trainerDashboard);
+router.get('/admin-stats', dashboardController.getAdminStats);
 
 module.exports = router;

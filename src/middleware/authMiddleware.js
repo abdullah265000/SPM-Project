@@ -1,37 +1,40 @@
-const { ROLES } = require('../utils/constants');
-const { verifyToken } = require('../utils/jwt');
-const { sendError } = require('../utils/apiResponse');
+const jwt = require('jsonwebtoken');
+const config = require('../config/env');
+const User = require('../models/User');
 
-// Verifies the Bearer token and attaches req.user = { id, role }.
-function protect(req, res, next) {
-  const header = req.headers.authorization;
-  if (!header || !header.startsWith('Bearer ')) {
-    return sendError(res, 401, 'Authentication required. Provide a Bearer token.');
+// Middleware 1: Verify JWT token
+exports.protect = async (req, res, next) => {
+  let token;
+
+  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+    token = req.headers.authorization.split(' ')[1];
   }
-  const token = header.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ success: false, message: 'Not authorized, token missing' });
+  }
+
   try {
-    const decoded = verifyToken(token);
-    req.user = { id: decoded.id, role: decoded.role };
-    return next();
-  } catch (err) {
-    return sendError(res, 401, 'Invalid or expired token.');
+    const decoded = jwt.verify(token, config.jwtSecret);
+    req.user = await User.findById(decoded.id).select('-password');
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'User no longer exists' });
+    }
+    next();
+  } catch (error) {
+    return res.status(401).json({ success: false, message: 'Not authorized, invalid token' });
   }
-}
+};
 
-// Allows access if the user owns the resource (matching param id) OR holds
-// one of the allowed roles. Used on member-scoped endpoints like session logs.
-function restrictTo(...allowedRoles) {
+// Middleware 2: Restrict routes by role
+exports.authorize = (...roles) => {
   return (req, res, next) => {
-    if (!req.user) return sendError(res, 401, 'Authentication required.');
-    if (allowedRoles.includes(req.user.role)) return next();
-    return sendError(res, 403, 'You do not have permission to perform this action.');
+    if (!req.user || !roles.includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: `User role '${req.user?.role}' is not authorized to access this resource`,
+      });
+    }
+    next();
   };
-}
-
-// Convenience: only management + admin (gym staff with elevated access).
-const staffOnly = restrictTo(ROLES.MANAGEMENT, ROLES.ADMIN);
-
-// Convenience: only trainers (plus admins who can act as trainers).
-const trainerOrAdmin = restrictTo(ROLES.TRAINER, ROLES.ADMIN);
-
-module.exports = { protect, restrictTo, staffOnly, trainerOrAdmin };
+};
