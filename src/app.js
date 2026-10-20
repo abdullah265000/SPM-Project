@@ -6,7 +6,7 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const mongoSanitize = require('express-mongo-sanitize');
 const config = require('./config/env');
-const connectDB = require('./config/db'); // <-- Added database import
+const connectDB = require('./config/db');
 const { notFound, errorHandler } = require('./middleware/errorMiddleware');
 
 // Routes
@@ -21,7 +21,7 @@ const dashboardRoutes = require('./routes/dashboardRoutes');
 
 const app = express();
 
-// --- Connect to MongoDB on Vercel requests ---
+// Ensure MongoDB is connected before handling any request on Vercel
 app.use(async (req, res, next) => {
   try {
     await connectDB();
